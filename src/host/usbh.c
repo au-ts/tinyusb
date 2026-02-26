@@ -1851,7 +1851,7 @@ static bool enum_parse_configuration_desc(uint8_t dev_addr, tusb_desc_configurat
     if (0 == tu_desc_len(p_desc)) {
       // A zero length descriptor indicates that the device is off spec (e.g. wrong wTotalLength).
       // Parsed interfaces should still be usable
-      TU_LOG_USBH("Encountered a zero-length descriptor after %" PRIu32 " bytes\r\n", (uint32_t)p_desc - (uint32_t)desc_cfg);
+      TU_LOG_USBH("Encountered a zero-length descriptor after %" PRIu32 " bytes\r\n", (uint64_t)p_desc - (uint64_t)desc_cfg);
       break;
     }
 

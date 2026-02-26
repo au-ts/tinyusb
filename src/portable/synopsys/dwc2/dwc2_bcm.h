@@ -31,6 +31,13 @@
  extern "C" {
 #endif
 
+#ifdef MICROKIT
+#include <microkit.h>
+#include <stdint.h>
+
+extern microkit_channel microkit_usb_irq;
+#endif
+
 #include "broadcom/defines.h"
 #include "broadcom/interrupts.h"
 #include "broadcom/caches.h"
@@ -80,6 +87,22 @@ static inline void dwc2_phy_update(dwc2_regs_t * dwc2, uint8_t hs_phy_type)
   (void) hs_phy_type;
 
   // nothing to do
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void dwc2_int_set(uint8_t rhport, tusb_role_t role, bool enabled) {
+  (void) role;
+#ifdef MICROKIT
+  if (enabled) {
+    microkit_irq_ack(microkit_usb_irq);
+  }
+#else
+  const IRQn_Type irqn = (IRQn_Type) _dwc2_controller[rhport].irqnum;
+  if (enabled) {
+    BP_EnableIRQ(irqn);
+  } else {
+    BP_DisableIRQ(irqn);
+  }
+#endif
 }
 
 #ifdef __cplusplus

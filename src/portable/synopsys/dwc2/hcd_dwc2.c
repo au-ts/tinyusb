@@ -648,7 +648,9 @@ static bool channel_xfer_start(dwc2_regs_t* dwc2, uint8_t ch_id) {
     channel->hcintmsk = HCINT_HALTED;
     dwc2->haintmsk |= TU_BIT(ch_id);
 
-    channel->hcdma = (uint32_t) edpt->buffer;
+    uint64_t buffer_addr = (uint64_t) edpt->buffer;
+    TU_ASSERT(buffer_addr < (1ULL << 32));
+    channel->hcdma = buffer_addr;
 
     if (hcchar_bm->ep_dir == TUSB_DIR_IN) {
       channel_send_in_token(dwc2, channel);
@@ -1287,7 +1289,7 @@ static void handle_channel_irq(uint8_t rhport, bool in_isr) {
           is_done = handle_channel_in_dma(dwc2, ch_id, hcint);
           if (is_done && (channel->hcdma > xfer->xferred_bytes)) {
             // hcdma is increased by word --> need to align4
-            hcd_dcache_invalidate((void*) tu_align4(channel->hcdma - xfer->xferred_bytes), xfer->xferred_bytes);
+            hcd_dcache_invalidate((void*) ((uintptr_t) tu_align4(channel->hcdma - xfer->xferred_bytes)), xfer->xferred_bytes);
           }
         }
         #endif

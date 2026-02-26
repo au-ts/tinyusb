@@ -507,7 +507,11 @@ uint32_t tu_edpt_stream_read(tu_edpt_stream_t *s, void *buffer, uint32_t bufsize
 //--------------------------------------------------------------------+
 
 #if CFG_TUSB_DEBUG
-#include <ctype.h>
+// #include <ctype.h>
+
+static inline int isprint(int c) {
+  return (c >= 0x20 && c <= 0x7E);
+}
 
 #if CFG_TUSB_DEBUG >= CFG_TUH_LOG_LEVEL || CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
 char const* const tu_str_speed[] = {"Full", "Low", "High"};
