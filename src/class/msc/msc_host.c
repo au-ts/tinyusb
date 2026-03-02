@@ -299,8 +299,8 @@ bool tuh_msc_reset(uint8_t dev_addr) {
 // CLASS-USBH API
 //--------------------------------------------------------------------+
 bool msch_init(void) {
-  TU_LOG_DRV("sizeof(msch_interface_t) = %u\r\n", sizeof(msch_interface_t));
-  TU_LOG_DRV("sizeof(msch_epbuf_t) = %u\r\n", sizeof(msch_epbuf_t));
+  TU_LOG_DRV("sizeof(msch_interface_t) = %lu\r\n", sizeof(msch_interface_t));
+  TU_LOG_DRV("sizeof(msch_epbuf_t) = %lu\r\n", sizeof(msch_epbuf_t));
   tu_memclr(_msch_itf, sizeof(_msch_itf));
   return true;
 }

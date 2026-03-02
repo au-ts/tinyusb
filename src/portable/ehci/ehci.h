@@ -125,10 +125,10 @@ TU_VERIFY_STATIC( sizeof(ehci_qtd_t) == 32, "size is not correct" );
 /// Queue Head
 typedef struct TU_ATTR_ALIGNED(32) {
   // Word 0 Next QHD
-  ehci_link_t next;
+  ehci_link_t next;                                                                       // 4B
 
   // Word 1 Endpoint Characteristics
-  uint32_t dev_addr              : 7;  // device address
+  uint32_t dev_addr              : 7;  // device address                                  // 4B
   uint32_t fl_inactive_next_xact : 1;  // Only valid for Periodic with Full/Slow speed
   uint32_t ep_number             : 4;  // EP number
   uint32_t ep_speed              : 2;  // Full (0), Low (1), High (2)
@@ -139,18 +139,18 @@ typedef struct TU_ATTR_ALIGNED(32) {
   uint32_t nak_reload            : 4;  // Used by HC
 
   // Word 2 Endpoint Capabilities
-  uint32_t int_smask             : 8;  // Interrupt Schedule Mask
+  uint32_t int_smask             : 8;  // Interrupt Schedule Mask                         // 4B
   uint32_t fl_int_cmask          : 8;  // Split Completion Mask for Full/Slow speed
   uint32_t fl_hub_addr           : 7;  // Hub Address for Full/Slow speed
   uint32_t fl_hub_port           : 7;  // Hub Port for Full/Slow speed
   uint32_t mult                  : 2;  // Transaction per micro frame
 
   // Word 3 Current qTD Pointer
-  volatile uint32_t qtd_addr;
+  volatile uint32_t qtd_addr;                                                             // 4B
 
   // Word 4-11 Transfer Overlay
-  volatile ehci_qtd_t qtd_overlay;
-
+  volatile ehci_qtd_t qtd_overlay;                                                        // 32B  
+                                                                                          // ...-> 48B
   //--------------------------------------------------------------------+
   /// Due to the fact QHD is 32 bytes aligned but occupies only 48 bytes
   /// thus there are 16 bytes padding free that we can make use of.
@@ -158,16 +158,16 @@ typedef struct TU_ATTR_ALIGNED(32) {
   uint8_t used;
   uint8_t removing;// removed from asyn list, waiting for async advance
   uint8_t pid;
-  uint8_t interval_ms;// polling interval in frames (or millisecond)
+  uint8_t interval_ms;// polling interval in frames (or millisecond)                      // 4B
 
-  uint8_t TU_RESERVED[4];
+  uint8_t TU_RESERVED[4];                                                                 // 4B
 
   // Attached TD management, note usbh will only queue 1 TD per QHD.
   // buffer for dcache invalidate since td's buffer is modified by HC and finding initial buffer address is not trivial
-  uint32_t attached_buffer;
-  ehci_qtd_t *volatile attached_qtd;
-} ehci_qhd_t;
-// TU_VERIFY_STATIC( sizeof(ehci_qhd_t) == 64, "size is not correct" );
+  uint32_t attached_buffer;                                                               // 4B
+  uint32_t attached_qtd;                                                      // 4B
+} ehci_qhd_t;                                                                             // ...->64B
+TU_VERIFY_STATIC( sizeof(ehci_qhd_t) == 64, "size is not correct" );
 
 /// Highspeed Isochronous Transfer Descriptor (section 3.3)
 typedef struct TU_ATTR_ALIGNED(32) {

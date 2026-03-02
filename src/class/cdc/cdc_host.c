@@ -550,7 +550,7 @@ bool tuh_cdc_set_control_line_state(uint8_t idx, uint16_t line_state, tuh_xfer_c
 bool tuh_cdc_set_baudrate(uint8_t idx, uint32_t baudrate, tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
   cdch_interface_t *p_cdc = get_itf(idx);
   TU_VERIFY(p_cdc && p_cdc->serial_drid < SERIAL_DRIVER_COUNT);
-  TU_LOG_CDC(p_cdc, "set baudrate %lu", baudrate);
+  TU_LOG_CDC(p_cdc, "set baudrate %u", baudrate);
   const cdch_serial_driver_t *driver = &serial_drivers[p_cdc->serial_drid];
 
   p_cdc->requested_line = p_cdc->line; // keep current line coding
@@ -596,7 +596,7 @@ bool tuh_cdc_set_line_coding(uint8_t idx, cdc_line_coding_t const *line_coding,
                              tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
   cdch_interface_t *p_cdc = get_itf(idx);
   TU_VERIFY(p_cdc && p_cdc->serial_drid < SERIAL_DRIVER_COUNT);
-  TU_LOG_CDC(p_cdc, "set line coding %lu %u%c%s",
+  TU_LOG_CDC(p_cdc, "set line coding %u %u%c%s",
                line_coding->bit_rate, line_coding->data_bits,
                CDC_LINE_CODING_PARITY_CHAR(line_coding->parity),
                CDC_LINE_CODING_STOP_BITS_TEXT(line_coding->stop_bits));
@@ -645,7 +645,7 @@ bool tuh_cdc_set_line_coding(uint8_t idx, cdc_line_coding_t const *line_coding,
 //--------------------------------------------------------------------+
 
 bool cdch_init(void) {
-  TU_LOG_DRV("sizeof(cdch_interface_t) = %u\r\n", sizeof(cdch_interface_t));
+  TU_LOG_DRV("sizeof(cdch_interface_t) = %lu\r\n", sizeof(cdch_interface_t));
   tu_memclr(cdch_data, sizeof(cdch_data));
   for (size_t i = 0; i < CFG_TUH_CDC; i++) {
     cdch_interface_t *p_cdc = &cdch_data[i];
@@ -824,7 +824,7 @@ bool cdch_set_config(uint8_t daddr, uint8_t itf_num) {
 static void cdch_process_set_config(tuh_xfer_t *xfer) {
   cdch_interface_t *p_cdc = get_itf_by_xfer(xfer);
   TU_ASSERT(p_cdc && p_cdc->serial_drid < SERIAL_DRIVER_COUNT,);
-  TU_LOG_DRV("  state = %u\r\n", xfer->user_data);
+  TU_LOG_DRV("  state = %lu\r\n", xfer->user_data);
   const cdch_serial_driver_t *driver = &serial_drivers[p_cdc->serial_drid];
 
   if (!driver->process_set_config(p_cdc, xfer)) {
@@ -1476,7 +1476,7 @@ static inline uint32_t ftdi_get_divisor(cdch_interface_t *p_cdc) {
       break;
   }
 
-  TU_LOG_CDC(p_cdc, "Baudrate divisor = 0x%lu", div_value);
+  TU_LOG_CDC(p_cdc, "Baudrate divisor = 0x%u", div_value);
 
   return div_value;
 }
@@ -2544,7 +2544,7 @@ static bool pl2303_encode_baud_rate(cdch_interface_t *p_cdc, uint8_t buf[PL2303_
   } else {
     baud = pl2303_encode_baud_rate_divisor(buf, baud);
   }
-  TU_LOG_CDC(p_cdc, "real baudrate %lu", baud);
+  TU_LOG_CDC(p_cdc, "real baudrate %u", baud);
 
   return true;
 }

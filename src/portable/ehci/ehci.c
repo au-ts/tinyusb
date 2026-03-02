@@ -63,8 +63,8 @@
                                          ((FRAMELIST_SIZE_BIT_VALUE >> 2) << EHCI_USBCMD_CHIPIDEA_FRAMELIST_SIZE_MSB_SHIFT))
 #else
   // STD EHCI: 256 elements
-  #define FRAMELIST_SIZE_BIT_VALUE      2u
-  #define FRAMELIST_SIZE_USBCMD_VALUE   ((FRAMELIST_SIZE_BIT_VALUE &  3) << EHCI_USBCMD_POS_FRAMELIST_SIZE)
+  #define FRAMELIST_SIZE_BIT_VALUE      0u
+  #define FRAMELIST_SIZE_USBCMD_VALUE   ((FRAMELIST_SIZE_BIT_VALUE &  3) << EHCI_USBCMD_FRAMELIST_SIZE_SHIFT)
 #endif
 
 #define FRAMELIST_SIZE                  (1024 >> FRAMELIST_SIZE_BIT_VALUE)
@@ -100,9 +100,9 @@ typedef struct {
 CFG_TUH_MEM_SECTION TU_ATTR_ALIGNED(4096) static ehci_data_t ehci_data;
 
 //--------------------------------------------------------------------+
-// Debug
+// Debu1
 //--------------------------------------------------------------------+
-#if 0 && CFG_TUSB_DEBUG >= (EHCI_DBG + 1)
+#if 1 && CFG_TUSB_DEBUG >= (EHCI_DBG + 1)
 static inline void print_portsc(ehci_registers_t* regs) {
   TU_LOG_HEX(EHCI_DBG, regs->portsc);
   TU_LOG(EHCI_DBG, "  Connect Status : %u\r\n", regs->portsc_bm.current_connect_status);
@@ -329,7 +329,8 @@ static void init_periodic_list(uint8_t rhport) {
   ehci_link_t * const head_8ms = (ehci_link_t *) &ehci_data.period_head_arr[3];
 
   for (uint32_t i = 0; i < FRAMELIST_SIZE; i++) {
-    framelist[i].address = (uint32_t) head_1ms;
+    assert((uint64_t) head_1ms <= (uint64_t) UINT32_MAX);
+    framelist[i].address = (uint32_t) (uint64_t) head_1ms;
     framelist[i].type = EHCI_QTYPE_QHD;
   }
 
@@ -348,10 +349,11 @@ static void init_periodic_list(uint8_t rhport) {
 
 bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
 {
+  TU_LOG3("\n\nEHCI INIT\n\n\n");
   tu_memclr(&ehci_data, sizeof(ehci_data_t));
 
-  ehci_data.regs = (ehci_registers_t*) operatial_reg;
-  ehci_data.cap_regs = (ehci_cap_registers_t*) capability_reg;
+  ehci_data.regs = (ehci_registers_t*) (uint64_t) operatial_reg;
+  ehci_data.cap_regs = (ehci_cap_registers_t*) (uint64_t) capability_reg;
 
   ehci_registers_t* regs = ehci_data.regs;
 
@@ -362,12 +364,15 @@ bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
   //------------- USB INT Register -------------//
 
   // disable all the interrupt
+  TU_LOG3("EHCI: disable interrupts\n");
   regs->inten  = 0;
 
   // clear all status except port change since device maybe connected before this driver is initialized
+  TU_LOG3("EHCI: clear status\n");
   regs->status = (EHCI_INT_MASK_ALL & ~EHCI_INT_MASK_PORT_CHANGE);
 
   // Enable interrupts
+  TU_LOG3("EHCI: enable interrupts\n");
   regs->inten  = EHCI_INT_MASK_USB | EHCI_INT_MASK_ERROR | EHCI_INT_MASK_PORT_CHANGE |
                  EHCI_INT_MASK_ASYNC_ADVANCE | EHCI_INT_MASK_FRAMELIST_ROLLOVER;
 
@@ -375,17 +380,29 @@ bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
   ehci_qhd_t * const async_head = list_get_async_head(rhport);
   tu_memclr(async_head, sizeof(ehci_qhd_t));
 
-  async_head->next.address               = (uint32_t) async_head; // circular list, next is itself
+  assert((uint64_t) async_head <= (uint64_t) UINT32_MAX);
+
+  async_head->next.address               = (uint32_t) (uint64_t) async_head; // circular list, next is itself
+  TU_LOG3("EHCI: async head at %p\n", async_head);
+  TU_LOG3("EHCI: async head->next.address at 0x%x\n", async_head->next.address);
+
+  // somehow, in QEMU, the next address is NULL?
+  // could be issue with caching...
+
   async_head->next.type                  = EHCI_QTYPE_QHD;
   async_head->head_list_flag             = 1;
   async_head->qtd_overlay.halted         = 1; // inactive most of time
   async_head->qtd_overlay.next.terminate = 1; // TODO removed if verified
 
-  regs->async_list_addr = (uint32_t) async_head;
+
+  regs->async_list_addr = (uint32_t) (uint64_t) async_head;
 
   //------------- Periodic List -------------//
+  TU_LOG3("EHCI: intialise periodic list\n");
   init_periodic_list(rhport);
-  regs->periodic_list_base = (uint32_t) ehci_data.period_framelist;
+  assert((uint64_t) ehci_data.period_framelist <= (uint64_t) UINT32_MAX);
+
+  regs->periodic_list_base = (uint32_t) (uint64_t) ehci_data.period_framelist;
 
   hcd_dcache_clean(&ehci_data, sizeof(ehci_data_t));
 
@@ -567,7 +584,7 @@ bool hcd_edpt_abort_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr) {
 
   // TODO ISO not supported yet
   ehci_qhd_t* qhd = qhd_get_from_addr(dev_addr, ep_addr);
-  ehci_qtd_t * volatile qtd = qhd->attached_qtd;
+  ehci_qtd_t * volatile qtd = (ehci_qtd_t * volatile) (uint64_t) qhd->attached_qtd;
   TU_VERIFY(qtd != NULL); // no queued transfer
 
   hcd_dcache_invalidate(qtd, sizeof(ehci_qtd_t));
@@ -647,7 +664,7 @@ void qhd_xfer_complete_isr(ehci_qhd_t * qhd) {
   volatile ehci_qtd_t *qtd_overlay = &qhd->qtd_overlay;
 
   // process non-active (completed) QHD with attached (scheduled) TD
-  if ( !qtd_overlay->active && qhd->attached_qtd != NULL ) {
+  if ( !qtd_overlay->active && qhd->attached_qtd != 0 ) {
     xfer_result_t xfer_result;
 
     if ( qtd_overlay->halted ) {
@@ -666,7 +683,7 @@ void qhd_xfer_complete_isr(ehci_qhd_t * qhd) {
       xfer_result = XFER_RESULT_SUCCESS;
     }
 
-    ehci_qtd_t * volatile qtd = qhd->attached_qtd;
+    ehci_qtd_t * volatile qtd = (ehci_qtd_t * volatile) (uint64_t) qhd->attached_qtd;
     hcd_dcache_invalidate(qtd, sizeof(ehci_qtd_t)); // HC may have written back TD
 
     uint8_t const dir = (qtd->pid == EHCI_PID_IN) ? 1 : 0;
@@ -674,7 +691,7 @@ void qhd_xfer_complete_isr(ehci_qhd_t * qhd) {
 
     // invalidate dcache if IN transfer with data
     if (dir == 1 && qhd->attached_buffer != 0 && xferred_bytes > 0) {
-      hcd_dcache_invalidate((void*) qhd->attached_buffer, xferred_bytes);
+      hcd_dcache_invalidate((void*) (uint64_t) qhd->attached_buffer, xferred_bytes);
     }
 
     // remove and free TD before invoking callback
@@ -698,7 +715,9 @@ void proccess_async_xfer_isr(ehci_qhd_t * const list_head) {
 
 TU_ATTR_ALWAYS_INLINE static inline
 void process_period_xfer_isr(uint8_t rhport, uint32_t interval_ms) {
-  uint32_t const period_1ms_addr = (uint32_t) list_get_period_head(rhport, 1u);
+  uint64_t period_head = (uint64_t) list_get_period_head(rhport, 1u);
+  assert(period_head <= (uint64_t) UINT32_MAX);
+  uint32_t const period_1ms_addr = (uint32_t) period_head;
   ehci_link_t next_link = *list_get_period_head(rhport, interval_ms);
 
   while (!next_link.terminate) {
@@ -731,6 +750,7 @@ void process_period_xfer_isr(uint8_t rhport, uint32_t interval_ms) {
 //------------- Host Controller Driver's Interrupt Handler -------------//
 void hcd_int_handler(uint8_t rhport, bool in_isr) {
   (void) in_isr;
+  TU_LOG1("EHCI: received interrupt\n");
   ehci_registers_t* regs = ehci_data.regs;
   uint32_t const int_status = regs->status;
 
@@ -796,12 +816,14 @@ TU_ATTR_ALWAYS_INLINE static inline ehci_qhd_t* list_get_async_head(uint8_t rhpo
 }
 
 TU_ATTR_ALWAYS_INLINE static inline ehci_link_t* list_next(ehci_link_t const *p_link) {
-  return (ehci_link_t*) tu_align32(p_link->address);
+  return (ehci_link_t*) (uint64_t) tu_align32(p_link->address);
 }
 
 TU_ATTR_ALWAYS_INLINE static inline void list_insert(ehci_link_t *current, ehci_link_t *entry, uint8_t type) {
   entry->address = current->address;
-  current->address = ((uint32_t) entry) | (type << 1);
+  assert((uint64_t) entry <= (uint64_t) UINT32_MAX);
+
+  current->address = ((uint32_t) (uint64_t) entry) | (type << 1);
 }
 
 // Remove a queue head from the list.
@@ -811,8 +833,10 @@ TU_ATTR_ALWAYS_INLINE static inline void list_remove(ehci_link_t* head, ehci_lin
   // TODO deactivate all TD, wait for QHD to inactive before removal
   prev->address = qhd->next.address;
 
+  assert((uint64_t) head <= (uint64_t) UINT32_MAX);
+
   // link the removed qhd's next to list head
-  qhd->next.address = ((uint32_t) head) | (EHCI_QTYPE_QHD << 1);
+  qhd->next.address = ((uint32_t) (uint64_t) head) | (EHCI_QTYPE_QHD << 1);
 
   if (qhd_is_periodic(qhd)) {
     // period list queue element is guarantee to be free in the next frame (1 ms)
@@ -869,7 +893,7 @@ TU_ATTR_ALWAYS_INLINE static inline ehci_qhd_t *qhd_find_free(void) {
 
 // Next queue head link
 TU_ATTR_ALWAYS_INLINE static inline ehci_qhd_t *qhd_next(ehci_qhd_t const *p_qhd) {
-  return (ehci_qhd_t *) tu_align32(p_qhd->next.address);
+  return (ehci_qhd_t *) (uint64_t) tu_align32(p_qhd->next.address);
 }
 
 // Get queue head from device + endpoint address
@@ -960,7 +984,7 @@ static void qhd_init(ehci_qhd_t *p_qhd, uint8_t dev_addr, tusb_desc_endpoint_t c
   //------------- HCD Management Data -------------//
   p_qhd->used         = 1;
   p_qhd->removing     = 0;
-  p_qhd->attached_qtd = NULL;
+  p_qhd->attached_qtd = 0;
   p_qhd->pid = tu_edpt_dir(ep_desc->bEndpointAddress) == TUSB_DIR_IN ? EHCI_PID_IN : EHCI_PID_OUT; // PID for TD under this endpoint
 
   //------------- active, but no TD list -------------//
@@ -975,21 +999,23 @@ static void qhd_init(ehci_qhd_t *p_qhd, uint8_t dev_addr, tusb_desc_endpoint_t c
 
 // Attach a TD to queue head
 static void qhd_attach_qtd(ehci_qhd_t *qhd, ehci_qtd_t *qtd) {
-  qhd->attached_qtd = qtd;
+  assert((uint64_t) qtd <= (uint64_t) UINT32_MAX);
+  qhd->attached_qtd = (uint32_t) (uint64_t) qtd;
   qhd->attached_buffer = qtd->buffer[0];
 
   // clean and invalidate cache before physically write
   hcd_dcache_clean_invalidate(qtd, sizeof(ehci_qtd_t));
 
-  qhd->qtd_overlay.next.address = (uint32_t) qtd;
+  assert((uint64_t) qtd <= (uint64_t) UINT32_MAX);
+  qhd->qtd_overlay.next.address = (uint32_t) (uint64_t) qtd;
   hcd_dcache_clean_invalidate(qhd, sizeof(ehci_qhd_t));
 }
 
 // Remove an attached TD from queue head
 static void qhd_remove_qtd(ehci_qhd_t *qhd) {
-  ehci_qtd_t * volatile qtd = qhd->attached_qtd;
+  ehci_qtd_t * volatile qtd = (ehci_qtd_t * volatile) (uint64_t) qhd->attached_qtd;
 
-  qhd->attached_qtd = NULL;
+  qhd->attached_qtd = 0;
   qhd->attached_buffer = 0;
   hcd_dcache_clean(qhd, sizeof(ehci_qhd_t));
 
@@ -1026,7 +1052,8 @@ static void qtd_init(ehci_qtd_t* qtd, void const* buffer, uint16_t total_bytes) 
   qtd->total_bytes         = total_bytes;
   qtd->expected_bytes      = total_bytes;
 
-  qtd->buffer[0] = (uint32_t) buffer;
+  assert((uint64_t) buffer <= (uint64_t) UINT32_MAX);
+  qtd->buffer[0] = (uint32_t) (uint64_t) buffer;
   for(uint8_t i=1; i<5; i++) {
     qtd->buffer[i] |= tu_align4k(qtd->buffer[i - 1] ) + 4096;
   }
