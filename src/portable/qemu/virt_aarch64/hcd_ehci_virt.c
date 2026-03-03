@@ -33,6 +33,7 @@
 #include "portable/ehci/ehci_api.h"
 
 #include <sddf/timer/client.h>
+#include <sddf/util/cache.h>
 
 //--------------------------------------------------------------------+
 // Controller API
@@ -75,5 +76,45 @@ int board_uart_read(uint8_t *buf, int len)
     return 0;
 }
 
+#define STRICT_ALIGN __attribute__((target("strict-align")))
+
+// Writes values from the cache back into memory but keep a copy in the cache.
+STRICT_ALIGN void data_clean(volatile void* starting_address, size_t size) {
+    unsigned long start = (unsigned long) starting_address;
+    unsigned long end = (unsigned long) starting_address + size;
+    cache_clean(start, end);
+}
+
+// Writes values from the cache back into memory and remove it from the cache.
+STRICT_ALIGN void data_clean_and_invalidate(volatile void* starting_address, size_t size) {
+    unsigned long start = (unsigned long) starting_address;
+    unsigned long end = (unsigned long) starting_address + size;
+    cache_clean_and_invalidate(start, end);
+}
+
+// Remove values from the cache because the value in memory may have changed.
+STRICT_ALIGN void data_invalidate(volatile void* starting_address, size_t size) {
+    unsigned long start = (unsigned long) starting_address;
+    unsigned long end = (unsigned long) starting_address + size;
+    cache_clean_and_invalidate(start, end);
+}
+
+bool hcd_dcache_clean(const void* addr, uint32_t data_size) {
+    TU_LOG3("EHCI BOARD: clean 0x%p\n", addr);
+  data_clean((volatile void *) addr, data_size);
+  return true;
+}
+
+bool hcd_dcache_invalidate(const void* addr, uint32_t data_size) {
+    TU_LOG3("EHCI BOARD: invalidate 0x%p\n", addr);
+  data_invalidate((volatile void *) addr, data_size);
+  return true;
+}
+
+bool hcd_dcache_clean_invalidate(const void* addr, uint32_t data_size) {
+    TU_LOG3("EHCI BOARD: clean and invalidate 0x%p\n", addr);
+  data_clean_and_invalidate((volatile  void*) addr, data_size);
+  return false;
+}
 
 #endif

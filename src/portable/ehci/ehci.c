@@ -24,6 +24,7 @@
  * This file is part of the TinyUSB stack.
  */
 
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED && defined(TUP_USBIP_EHCI)
@@ -96,8 +97,12 @@ typedef struct {
   volatile uint32_t uframe_number;
 }ehci_data_t;
 
+
+#define EHCI_DMA_ADDR  0x70000000
+
 // Periodic frame list must be 4K alignment
-CFG_TUH_MEM_SECTION TU_ATTR_ALIGNED(4096) static ehci_data_t ehci_data;
+// CFG_TUH_MEM_SECTION TU_ATTR_ALIGNED(4096) 
+static ehci_data_t *ehci_data = (ehci_data_t *) EHCI_DMA_ADDR;
 
 //--------------------------------------------------------------------+
 // Debu1
@@ -224,14 +229,14 @@ static void nxp_usbphy_disconn_detector_set(uint8_t port, bool enable) {
 //--------------------------------------------------------------------+
 uint32_t hcd_frame_number(uint8_t rhport) {
   (void) rhport;
-  uint32_t uframe = ehci_data.regs->frame_index;
-  return (ehci_data.uframe_number + uframe) >> 3;
+  uint32_t uframe = ehci_data->regs->frame_index;
+  return (ehci_data->uframe_number + uframe) >> 3;
 }
 
 void hcd_port_reset(uint8_t rhport) {
   (void) rhport;
 
-  ehci_registers_t* regs = ehci_data.regs;
+  ehci_registers_t* regs = ehci_data->regs;
 
   // skip if already in reset
   if (regs->portsc_bm.port_reset) {
@@ -259,7 +264,7 @@ void hcd_port_reset(uint8_t rhport) {
 
 void hcd_port_reset_end(uint8_t rhport) {
   (void) rhport;
-  ehci_registers_t* regs = ehci_data.regs;
+  ehci_registers_t* regs = ehci_data->regs;
 
   // stop reset only if is not complete yet
   if (regs->portsc_bm.port_reset) {
@@ -280,12 +285,12 @@ void hcd_port_reset_end(uint8_t rhport) {
 
 bool hcd_port_connect_status(uint8_t rhport) {
   (void) rhport;
-  return ehci_data.regs->portsc_bm.current_connect_status;
+  return ehci_data->regs->portsc_bm.current_connect_status;
 }
 
 tusb_speed_t hcd_port_speed_get(uint8_t rhport) {
   (void) rhport;
-  return (tusb_speed_t) ehci_data.regs->portsc_bm.nxp_port_speed; // NXP specific port speed
+  return (tusb_speed_t) ehci_data->regs->portsc_bm.nxp_port_speed; // NXP specific port speed
 }
 
 // Close all opened endpoint belong to this device
@@ -299,21 +304,21 @@ void hcd_device_close(uint8_t rhport, uint8_t daddr) {
   list_remove_qhd_by_addr((ehci_link_t *) list_get_async_head(rhport), daddr, TUSB_INDEX_INVALID_8);
 
   // Remove from all interval period list of this device
-  for (uint8_t i = 0; i < TU_ARRAY_SIZE(ehci_data.period_head_arr); i++) {
-    list_remove_qhd_by_addr((ehci_link_t *) &ehci_data.period_head_arr[i], daddr, TUSB_INDEX_INVALID_8);
+  for (uint8_t i = 0; i < TU_ARRAY_SIZE(ehci_data->period_head_arr); i++) {
+    list_remove_qhd_by_addr((ehci_link_t *) &ehci_data->period_head_arr[i], daddr, TUSB_INDEX_INVALID_8);
   }
 
   // Async doorbell (EHCI 4.8.2 for operational details)
-  ehci_data.regs->command_bm.async_adv_doorbell = 1;
+  ehci_data->regs->command_bm.async_adv_doorbell = 1;
 }
 
 static void init_periodic_list(uint8_t rhport) {
   (void) rhport;
 
   // Build the polling interval tree with 1 ms, 2 ms, 4 ms and 8 ms (framesize) only
-  for ( uint32_t i = 0; i < TU_ARRAY_SIZE(ehci_data.period_head_arr); i++ ) {
-    ehci_data.period_head_arr[i].int_smask          = 1; // queue head in period list must have smask non-zero
-    ehci_data.period_head_arr[i].qtd_overlay.halted = 1; // dummy node, always inactive
+  for ( uint32_t i = 0; i < TU_ARRAY_SIZE(ehci_data->period_head_arr); i++ ) {
+    ehci_data->period_head_arr[i].int_smask          = 1; // queue head in period list must have smask non-zero
+    ehci_data->period_head_arr[i].qtd_overlay.halted = 1; // dummy node, always inactive
   }
 
   // TODO EHCI_FRAMELIST_SIZE with other size than 8
@@ -322,11 +327,11 @@ static void init_periodic_list(uint8_t rhport) {
   // 1, 5 --> period_head_arr[2] (4ms)
   // 3 --> period_head_arr[3] (8ms)
 
-  ehci_link_t * const framelist  = ehci_data.period_framelist;
-  ehci_link_t * const head_1ms = (ehci_link_t *) &ehci_data.period_head_arr[0];
-  ehci_link_t * const head_2ms = (ehci_link_t *) &ehci_data.period_head_arr[1];
-  ehci_link_t * const head_4ms = (ehci_link_t *) &ehci_data.period_head_arr[2];
-  ehci_link_t * const head_8ms = (ehci_link_t *) &ehci_data.period_head_arr[3];
+  ehci_link_t * const framelist  = ehci_data->period_framelist;
+  ehci_link_t * const head_1ms = (ehci_link_t *) &ehci_data->period_head_arr[0];
+  ehci_link_t * const head_2ms = (ehci_link_t *) &ehci_data->period_head_arr[1];
+  ehci_link_t * const head_4ms = (ehci_link_t *) &ehci_data->period_head_arr[2];
+  ehci_link_t * const head_8ms = (ehci_link_t *) &ehci_data->period_head_arr[3];
 
   for (uint32_t i = 0; i < FRAMELIST_SIZE; i++) {
     assert((uint64_t) head_1ms <= (uint64_t) UINT32_MAX);
@@ -350,13 +355,24 @@ static void init_periodic_list(uint8_t rhport) {
 bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
 {
   TU_LOG3("\n\nEHCI INIT\n\n\n");
-  tu_memclr(&ehci_data, sizeof(ehci_data_t));
 
-  ehci_data.regs = (ehci_registers_t*) (uint64_t) operatial_reg;
-  ehci_data.cap_regs = (ehci_cap_registers_t*) (uint64_t) capability_reg;
+  tu_memclr(ehci_data, sizeof(ehci_data_t));
+  TU_LOG3("EHCI: ehci_data at 0x%p\n", ehci_data);
+  TU_LOG3("EHCI: sizeof(ehci_data_t)=%lu\n", sizeof(ehci_data_t));
+  // TU_LOG3("... zeroed EHCI DMA region\n");
 
-  ehci_registers_t* regs = ehci_data.regs;
+  ehci_data->regs = (ehci_registers_t*) (uint64_t) operatial_reg;
+  // TU_LOG3("EHCI: set regs at 0x%p=0x%x\n", &ehci_data->regs, operatial_reg);
+  ehci_data->cap_regs = (ehci_cap_registers_t*) (uint64_t) capability_reg;
+  // TU_LOG3("EHCI: set cap_regs at 0x%p=0x%x\n", &ehci_data->cap_regs, capability_reg);
 
+  ehci_registers_t* regs = ehci_data->regs;
+  // TU_LOG3("EHCI: read regs at 0x%p as 0x%p\n", &ehci_data->regs, ehci_data->regs);
+  // TU_LOG3("EHCI: read cap_regs at 0x%p as as 0x%p\n", &ehci_data->cap_regs, ehci_data->cap_regs);
+
+  hcd_dcache_clean(ehci_data, sizeof(ehci_data_t));
+  // TU_LOG3("EHCI: read regs at 0x%p as 0x%p\n", &ehci_data->regs, ehci_data->regs);
+  // TU_LOG3("EHCI: read cap_regs at 0x%p as as 0x%p\n", &ehci_data->cap_regs, ehci_data->cap_regs);
   // EHCI 4.1 Host Controller Initialization
 
   //------------- CTRLDSSEGMENT Register (skip) -------------//
@@ -384,7 +400,7 @@ bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
 
   async_head->next.address               = (uint32_t) (uint64_t) async_head; // circular list, next is itself
   TU_LOG3("EHCI: async head at %p\n", async_head);
-  TU_LOG3("EHCI: async head->next.address at 0x%x\n", async_head->next.address);
+  TU_LOG3("EHCI: async head->next.address at %x\n", async_head->next.address);
 
   // somehow, in QEMU, the next address is NULL?
   // could be issue with caching...
@@ -400,16 +416,17 @@ bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
   //------------- Periodic List -------------//
   TU_LOG3("EHCI: intialise periodic list\n");
   init_periodic_list(rhport);
-  assert((uint64_t) ehci_data.period_framelist <= (uint64_t) UINT32_MAX);
+  assert((uint64_t) ehci_data->period_framelist <= (uint64_t) UINT32_MAX);
 
-  regs->periodic_list_base = (uint32_t) (uint64_t) ehci_data.period_framelist;
+  regs->periodic_list_base = (uint32_t) (uint64_t) ehci_data->period_framelist;
 
-  hcd_dcache_clean(&ehci_data, sizeof(ehci_data_t));
+  hcd_dcache_clean(ehci_data, sizeof(ehci_data_t));
 
   //------------- TT Control (NXP only) -------------//
   regs->nxp_tt_control = 0;
 
   //------------- USB CMD Register -------------//
+
   regs->command |= EHCI_USBCMD_RUN_STOP | EHCI_USBCMD_PERIOD_SCHEDULE_ENABLE | EHCI_USBCMD_ASYNC_SCHEDULE_ENABLE |
                    FRAMELIST_SIZE_USBCMD_VALUE;
 
@@ -417,7 +434,9 @@ bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
 
   // enable port power bit in portsc. The function of this bit depends on the value of the Port
   // Power Control (PPC) field in the HCSPARAMS register.
-  if (ehci_data.cap_regs->hcsparams_bm.port_power_control) {
+  // TU_LOG3("EHCI: load.. ehci_data=%p\n", ehci_data);
+  // TU_LOG3("EHCI: load.. ehci_data->cap_regs=%p\n", ehci_data->cap_regs);
+  if (ehci_data->cap_regs->hcsparams_bm.port_power_control) {
     // mask out all change bits since they are Write 1 to clear
     uint32_t portsc = (regs->portsc & ~EHCI_PORTSC_MASK_W1C);
     portsc |= EHCI_PORTSC_MASK_PORT_POWER;
@@ -514,8 +533,8 @@ bool hcd_edpt_close(uint8_t rhport, uint8_t daddr, uint8_t ep_addr) {
 bool hcd_setup_send(uint8_t rhport, uint8_t dev_addr, uint8_t const setup_packet[8]) {
   (void) rhport;
 
-  ehci_qhd_t* qhd = &ehci_data.control[dev_addr].qhd;
-  ehci_qtd_t* td  = &ehci_data.control[dev_addr].qtd;
+  ehci_qhd_t* qhd = &ehci_data->control[dev_addr].qhd;
+  ehci_qtd_t* td  = &ehci_data->control[dev_addr].qtd;
 
   qtd_init(td, setup_packet, 8);
   td->pid = EHCI_PID_SETUP;
@@ -593,7 +612,7 @@ bool hcd_edpt_abort_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr) {
   // HC is still processing, disable HC list schedule before making changes
   bool const is_period = (qhd->interval_ms > 0);
 
-  ehci_disable_schedule(ehci_data.regs, is_period);
+  ehci_disable_schedule(ehci_data->regs, is_period);
 
   // check active bit again just in case HC has just processed the TD
   bool const still_active = qtd->active;
@@ -606,7 +625,7 @@ bool hcd_edpt_abort_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr) {
     qhd_remove_qtd(qhd);
   }
 
-  ehci_enable_schedule(ehci_data.regs, is_period);
+  ehci_enable_schedule(ehci_data->regs, is_period);
 
   return still_active; // true if removed an active transfer
 }
@@ -632,7 +651,7 @@ TU_ATTR_ALWAYS_INLINE static inline
 void async_advance_isr(uint8_t rhport) {
   (void) rhport;
 
-  ehci_qhd_t *qhd_pool = ehci_data.qhd_pool;
+  ehci_qhd_t *qhd_pool = ehci_data->qhd_pool;
   for (uint32_t i = 0; i < QHD_MAX; i++) {
     if (qhd_pool[i].removing) {
       qhd_pool[i].removing = 0;
@@ -644,7 +663,7 @@ void async_advance_isr(uint8_t rhport) {
 TU_ATTR_ALWAYS_INLINE static inline
 void port_connect_status_change_isr(uint8_t rhport) {
   // NOTE There is an sequence plug->unplug->…..-> plug if device is powering with pre-plugged device
-  if ( ehci_data.regs->portsc_bm.current_connect_status ) {
+  if ( ehci_data->regs->portsc_bm.current_connect_status ) {
     hcd_port_reset(rhport);
     hcd_event_device_attach(rhport, true);
   } else // device unplugged
@@ -751,7 +770,7 @@ void process_period_xfer_isr(uint8_t rhport, uint32_t interval_ms) {
 void hcd_int_handler(uint8_t rhport, bool in_isr) {
   (void) in_isr;
   TU_LOG1("EHCI: received interrupt\n");
-  ehci_registers_t* regs = ehci_data.regs;
+  ehci_registers_t* regs = ehci_data->regs;
   uint32_t const int_status = regs->status;
 
   if (int_status & EHCI_INT_MASK_HC_HALTED) {
@@ -762,7 +781,7 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   }
 
   if (int_status & EHCI_INT_MASK_FRAMELIST_ROLLOVER) {
-    ehci_data.uframe_number += (FRAMELIST_SIZE << 3);
+    ehci_data->uframe_number += (FRAMELIST_SIZE << 3);
     regs->status = EHCI_INT_MASK_FRAMELIST_ROLLOVER; // Acknowledge
   }
 
@@ -806,7 +825,7 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
 // Get head of periodic list
 TU_ATTR_ALWAYS_INLINE static inline ehci_link_t* list_get_period_head(uint8_t rhport, uint32_t interval_ms) {
   (void) rhport;
-  return (ehci_link_t*) &ehci_data.period_head_arr[ tu_log2( tu_min32(FRAMELIST_SIZE, interval_ms) ) ];
+  return (ehci_link_t*) &ehci_data->period_head_arr[ tu_log2( tu_min32(FRAMELIST_SIZE, interval_ms) ) ];
 }
 
 // Get head of async list
@@ -878,14 +897,14 @@ static void list_remove_qhd_by_addr(ehci_link_t *list_head, uint8_t dev_addr, ui
 
 // Get queue head for control transfer (always available)
 TU_ATTR_ALWAYS_INLINE static inline ehci_qhd_t* qhd_control(uint8_t dev_addr) {
-  return &ehci_data.control[dev_addr].qhd;
+  return &ehci_data->control[dev_addr].qhd;
 }
 
 // Find a free queue head
 TU_ATTR_ALWAYS_INLINE static inline ehci_qhd_t *qhd_find_free(void) {
   for (uint32_t i = 0; i < QHD_MAX; i++) {
-    if (!ehci_data.qhd_pool[i].used) {
-      return &ehci_data.qhd_pool[i];
+    if (!ehci_data->qhd_pool[i].used) {
+      return &ehci_data->qhd_pool[i];
     }
   }
   return NULL;
@@ -902,7 +921,7 @@ static ehci_qhd_t *qhd_get_from_addr(uint8_t dev_addr, uint8_t ep_addr) {
     return qhd_control(dev_addr);
   }
 
-  ehci_qhd_t *qhd_pool = ehci_data.qhd_pool;
+  ehci_qhd_t *qhd_pool = ehci_data->qhd_pool;
 
   // protect qhd_pool since 'used' and 'removing' can be changed in isr
   ehci_qhd_t *result = NULL;
@@ -1029,12 +1048,12 @@ static void qhd_remove_qtd(ehci_qhd_t *qhd) {
 
 // Get TD for control transfer (always available)
 TU_ATTR_ALWAYS_INLINE static inline ehci_qtd_t* qtd_control(uint8_t dev_addr) {
-  return &ehci_data.control[dev_addr].qtd;
+  return &ehci_data->control[dev_addr].qtd;
 }
 
 TU_ATTR_ALWAYS_INLINE static inline ehci_qtd_t *qtd_find_free(void) {
   for (uint32_t i = 0; i < QTD_MAX; i++) {
-    if (!ehci_data.qtd_pool[i].used) return &ehci_data.qtd_pool[i];
+    if (!ehci_data->qtd_pool[i].used) return &ehci_data->qtd_pool[i];
   }
   return NULL;
 }
