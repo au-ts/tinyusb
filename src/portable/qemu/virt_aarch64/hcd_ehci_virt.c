@@ -101,19 +101,19 @@ STRICT_ALIGN void data_invalidate(volatile void* starting_address, size_t size) 
 
 bool hcd_dcache_clean(const void* addr, uint32_t data_size) {
     // TU_LOG3("EHCI BOARD: clean 0x%p\n", addr);
-  data_clean((volatile void *) addr, data_size);
+  // data_clean((volatile void *) addr, data_size);
   return true;
 }
 
 bool hcd_dcache_invalidate(const void* addr, uint32_t data_size) {
     // TU_LOG3("EHCI BOARD: invalidate 0x%p\n", addr);
-  data_invalidate((volatile void *) addr, data_size);
+  // data_invalidate((volatile void *) addr, data_size);
   return true;
 }
 
 bool hcd_dcache_clean_invalidate(const void* addr, uint32_t data_size) {
     // TU_LOG3("EHCI BOARD: clean and invalidate 0x%p\n", addr);
-  data_clean_and_invalidate((volatile  void*) addr, data_size);
+  // data_clean_and_invalidate((volatile  void*) addr, data_size);
   return false;
 }
 

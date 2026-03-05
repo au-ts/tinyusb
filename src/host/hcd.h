@@ -217,8 +217,9 @@ void hcd_event_xfer_complete(uint8_t dev_addr, uint8_t ep_addr, uint32_t xferred
   event.xfer_complete.ep_addr = ep_addr;
   event.xfer_complete.result = result;
   event.xfer_complete.len = xferred_bytes;
-
+  TU_LOG3("HCD: added event from device=%d: (ep=%d, result=%d, len=%u)\n", dev_addr, ep_addr, result, xferred_bytes);
   hcd_event_handler(&event, in_isr);
+  TU_LOG3("HCD: returning back to EHCI driver\n");
 }
 
 #ifdef __cplusplus

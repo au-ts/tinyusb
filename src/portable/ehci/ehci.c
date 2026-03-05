@@ -718,12 +718,14 @@ void qhd_xfer_complete_isr(ehci_qhd_t * qhd) {
 
     // notify usbh
     uint8_t const ep_addr = tu_edpt_addr(qhd->ep_number, dir);
+    TU_LOG3("EHCI: send completed xfer event to usbh\n");
     hcd_event_xfer_complete(qhd->dev_addr, ep_addr, xferred_bytes, xfer_result, true);
   }
 }
 
 TU_ATTR_ALWAYS_INLINE static inline
 void proccess_async_xfer_isr(ehci_qhd_t * const list_head) {
+  TU_LOG3("EHCI: process async xfer\n");
   ehci_qhd_t *qhd = list_head;
 
   do {
@@ -769,7 +771,6 @@ void process_period_xfer_isr(uint8_t rhport, uint32_t interval_ms) {
 //------------- Host Controller Driver's Interrupt Handler -------------//
 void hcd_int_handler(uint8_t rhport, bool in_isr) {
   (void) in_isr;
-  TU_LOG1("EHCI: received interrupt\n");
   ehci_registers_t* regs = ehci_data->regs;
   uint32_t const int_status = regs->status;
 
@@ -781,12 +782,14 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   }
 
   if (int_status & EHCI_INT_MASK_FRAMELIST_ROLLOVER) {
+    TU_LOG3("EHCI: interrupt->framelist rollover\n");
     ehci_data->uframe_number += (FRAMELIST_SIZE << 3);
     regs->status = EHCI_INT_MASK_FRAMELIST_ROLLOVER; // Acknowledge
   }
 
   if (int_status & EHCI_INT_MASK_PORT_CHANGE) {
     // Including: Force port resume, over-current change, enable/disable change and connect status change.
+    TU_LOG3("EHCI: port change\n");
     uint32_t const port_status = regs->portsc & EHCI_PORTSC_MASK_W1C;
     // print_portsc(regs);
 
@@ -801,11 +804,15 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   // A USB transfer is completed (OK or error)
   uint32_t const usb_int = int_status & (EHCI_INT_MASK_USB | EHCI_INT_MASK_ERROR);
   if (usb_int) {
+    TU_LOG3("EHCI: usb xfer complete\n");
     proccess_async_xfer_isr(list_get_async_head(rhport));
 
-    for ( uint32_t i = 1; i <= FRAMELIST_SIZE; i *= 2 ) {
+    TU_LOG3("EHCI: processing period xfers\n");
+    for ( uint32_t i = 1; i <= 8; i *= 2 ) { /// HACK: changed FRAME_LIMIT_MAX or whatever to "8"
+      TU_LOG3("EHCI: process transfer %d\n", i);
       process_period_xfer_isr(rhport, i);
     }
+    TU_LOG3("EHCI: done!\n");
 
     regs->status = usb_int; // Acknowledge
   }

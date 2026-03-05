@@ -329,6 +329,7 @@ TU_ATTR_ALWAYS_INLINE static inline bool is_hub_addr(uint8_t daddr) {
 TU_ATTR_ALWAYS_INLINE static inline bool queue_event(hcd_event_t const * event, bool in_isr) {
   TU_ASSERT(osal_queue_send(_usbh_q, event, in_isr));
   tuh_event_hook_cb(event->rhport, event->event_id, in_isr);
+  TU_LOG3("USBH: event queued!\n");
   return true;
 }
 
@@ -592,6 +593,7 @@ bool tuh_task_event_ready(void) {
     @endcode
  */
 void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
+  TU_LOG3("USBH: TUH event handler called\n");
   (void) in_isr; // not implemented yet
 
   // Skip if stack is not initialized
@@ -608,10 +610,14 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
     }
 #endif
     hcd_event_t event;
-    if (!osal_queue_receive(_usbh_q, &event, timeout_ms)) { return; }
+    if (!osal_queue_receive(_usbh_q, &event, timeout_ms)) {
+      TU_LOG3("done processing %d events\n", epr);
+      return; 
+    }
 
     switch (event.event_id) {
       case HCD_EVENT_DEVICE_ATTACH:
+        TU_LOG3("USBH: device attach\n");
         // Should we miss the hub detach event due to high traffic, Or due to physical debouncing, some devices can
         // cause multiple attaches (actually reset) without detach event.
         // Force remove currently mounted with the same bus info (rhport, hub addr, hub port) if exists
@@ -636,11 +642,13 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
         break;
 
       case HCD_EVENT_DEVICE_REMOVE:
+        TU_LOG3("USBH: device remove\n");
         TU_LOG_USBH("[%u:%u:%u] USBH DEVICE REMOVED\r\n", event.rhport, event.connection.hub_addr, event.connection.hub_port);
         process_remove_event(&event);
         break;
 
       case HCD_EVENT_XFER_COMPLETE: {
+        TU_LOG3("USBH: xfer complete\n");
         uint8_t const ep_addr = event.xfer_complete.ep_addr;
         uint8_t const epnum = tu_edpt_number(ep_addr);
         uint8_t const ep_dir = (uint8_t) tu_edpt_dir(ep_addr);
@@ -660,8 +668,10 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
           dev->ep_status[epnum][ep_dir].claimed = 0;
 
           if (0 == epnum) {
+            TU_LOG3("USBH: callback for control endpoint\n");
             usbh_control_xfer_cb(event.dev_addr, ep_addr, (xfer_result_t) event.xfer_complete.result, event.xfer_complete.len);
           } else {
+            TU_LOG3("USBH: callback for non-control endpoint\n");
             // Prefer application callback over built-in one if available. This occurs when tuh_edpt_xfer() is used
             // with enabled driver e.g HID endpoint
             #if CFG_TUH_API_EDPT_XFER
@@ -1115,6 +1125,7 @@ TU_ATTR_FAST_FUNC void hcd_event_handler(hcd_event_t const* event, bool in_isr) 
   switch (event->event_id) {
     case HCD_EVENT_DEVICE_ATTACH:
     case HCD_EVENT_DEVICE_REMOVE:
+    TU_LOG3("USBH: device attached/removed\n");
       // Attach debouncing on roothub: skip attach/remove while debouncing delay
       if (event->connection.hub_addr == 0) {
         if (tu_bit_test(_usbh_data.attach_debouncing_bm, event->rhport)) {
@@ -1133,6 +1144,7 @@ TU_ATTR_FAST_FUNC void hcd_event_handler(hcd_event_t const* event, bool in_isr) 
       break;
   }
 
+  TU_LOG3("USBH: queueing event..\n");
   queue_event(event, in_isr);
 }
 
