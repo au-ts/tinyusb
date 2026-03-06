@@ -584,6 +584,8 @@ bool hcd_edpt_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr, uint8_t * 
     qtd = qtd_find_free();
     TU_ASSERT(qtd);
 
+    TU_LOG3("transfer using buffer 0x%p (len=%d)\n", buffer, buflen);
+    TU_LOG3("buffer=[0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x]\n", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]);
     qtd_init(qtd, buffer, buflen);
     qtd->pid = qhd->pid;
   }

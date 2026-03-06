@@ -66,7 +66,8 @@ typedef struct {
 } hidh_epbuf_t;
 
 static hidh_interface_t _hidh_itf[CFG_TUH_HID];
-CFG_TUH_MEM_SECTION static hidh_epbuf_t _hidh_epbuf[CFG_TUH_HID];
+/* hack: hardcoded */
+CFG_TUH_MEM_SECTION static hidh_epbuf_t *_hidh_epbuf = (hidh_epbuf_t *) 0x70020000;
 
 static uint8_t _hidh_default_protocol = HID_PROTOCOL_BOOT;
 
@@ -470,6 +471,8 @@ bool tuh_hid_send_report(uint8_t daddr, uint8_t idx, uint8_t report_id, const vo
 bool hidh_init(void) {
   TU_LOG_DRV("sizeof(hidh_interface_t) = %lu\r\n", sizeof(hidh_interface_t));
   tu_memclr(_hidh_itf, sizeof(_hidh_itf));
+  TU_LOG3("_hidh_epbuf=0x%p\n", _hidh_epbuf);
+  tu_memclr(_hidh_epbuf, 0x10000); /* hack: hardcoded size */
   return true;
 }
 
