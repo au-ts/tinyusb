@@ -536,6 +536,9 @@ bool hcd_setup_send(uint8_t rhport, uint8_t dev_addr, uint8_t const setup_packet
   ehci_qhd_t* qhd = &ehci_data->control[dev_addr].qhd;
   ehci_qtd_t* td  = &ehci_data->control[dev_addr].qtd;
 
+  // TU_LOG3("EHCI: buffer0 for QTD at 0x%x\n", td->buffer[0]);
+  // TU_LOG3("EHCI: buffer1 for QTD at 0x%x\n", td->buffer[1]);
+
   qtd_init(td, setup_packet, 8);
   td->pid = EHCI_PID_SETUP;
 
@@ -718,14 +721,14 @@ void qhd_xfer_complete_isr(ehci_qhd_t * qhd) {
 
     // notify usbh
     uint8_t const ep_addr = tu_edpt_addr(qhd->ep_number, dir);
-    TU_LOG3("EHCI: send completed xfer event to usbh\n");
+    // TU_LOG3("EHCI: send completed xfer event to usbh\n");
     hcd_event_xfer_complete(qhd->dev_addr, ep_addr, xferred_bytes, xfer_result, true);
   }
 }
 
 TU_ATTR_ALWAYS_INLINE static inline
 void proccess_async_xfer_isr(ehci_qhd_t * const list_head) {
-  TU_LOG3("EHCI: process async xfer\n");
+  // TU_LOG3("EHCI: process async xfer\n");
   ehci_qhd_t *qhd = list_head;
 
   do {
@@ -782,7 +785,7 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   }
 
   if (int_status & EHCI_INT_MASK_FRAMELIST_ROLLOVER) {
-    TU_LOG3("EHCI: interrupt->framelist rollover\n");
+    // TU_LOG3("EHCI: interrupt->framelist rollover\n");
     ehci_data->uframe_number += (FRAMELIST_SIZE << 3);
     regs->status = EHCI_INT_MASK_FRAMELIST_ROLLOVER; // Acknowledge
   }
@@ -804,15 +807,15 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   // A USB transfer is completed (OK or error)
   uint32_t const usb_int = int_status & (EHCI_INT_MASK_USB | EHCI_INT_MASK_ERROR);
   if (usb_int) {
-    TU_LOG3("EHCI: usb xfer complete\n");
+    // TU_LOG3("EHCI: usb xfer complete\n");
     proccess_async_xfer_isr(list_get_async_head(rhport));
 
-    TU_LOG3("EHCI: processing period xfers\n");
+    // TU_LOG3("EHCI: processing period xfers\n");
     for ( uint32_t i = 1; i <= 8; i *= 2 ) { /// HACK: changed FRAME_LIMIT_MAX or whatever to "8"
-      TU_LOG3("EHCI: process transfer %d\n", i);
+      // TU_LOG3("EHCI: process transfer %d\n", i);
       process_period_xfer_isr(rhport, i);
     }
-    TU_LOG3("EHCI: done!\n");
+    // TU_LOG3("EHCI: done!\n");
 
     regs->status = usb_int; // Acknowledge
   }
@@ -1083,6 +1086,16 @@ static void qtd_init(ehci_qtd_t* qtd, void const* buffer, uint16_t total_bytes) 
   for(uint8_t i=1; i<5; i++) {
     qtd->buffer[i] |= tu_align4k(qtd->buffer[i - 1] ) + 4096;
   }
+
+  // TU_LOG3("bufferp[0]=0x%x\n", qtd->buffer[0]);
+  // TU_LOG3("bufferp[1]=0x%x\n", qtd->buffer[1]);
+  // TU_LOG3("bufferp[2]=0x%x\n", qtd->buffer[2]);
+  // TU_LOG3("bufferp[3]=0x%x\n", qtd->buffer[3]);
+  // TU_LOG3("bufferp[4]=0x%x\n", qtd->buffer[4]);
+  // TU_LOG3("bufferp[5]=0x%x\n", qtd->buffer[5]);
+  // TU_LOG3("bufferp[6]=0x%x\n", qtd->buffer[6]);
+  // TU_LOG3("bufferp[7]=0x%x\n", qtd->buffer[7]);
+
 }
 
 #endif
