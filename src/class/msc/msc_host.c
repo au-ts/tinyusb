@@ -77,7 +77,7 @@ typedef struct {
 } msch_epbuf_t;
 
 static msch_interface_t _msch_itf[CFG_TUH_DEVICE_MAX];
-CFG_TUH_MEM_SECTION static msch_epbuf_t _msch_epbuf[CFG_TUH_DEVICE_MAX];
+CFG_TUH_MEM_SECTION static msch_epbuf_t *_msch_epbuf = (msch_epbuf_t *) 0x70030000;
 
 TU_ATTR_ALWAYS_INLINE static inline msch_interface_t* get_itf(uint8_t daddr) {
   return &_msch_itf[daddr - 1];
@@ -133,7 +133,7 @@ bool tuh_msc_ready(uint8_t dev_addr) {
 // PUBLIC API: SCSI COMMAND
 //--------------------------------------------------------------------+
 static inline void cbw_init(msc_cbw_t* cbw, uint8_t lun) {
-  tu_memclr(cbw, sizeof(msc_cbw_t));
+  // tu_memclr(cbw, sizeof(msc_cbw_t)); causes alignment fault
   cbw->signature = MSC_CBW_SIGNATURE;
   cbw->tag       = 0x54555342; // TUSB
   cbw->lun       = lun;
@@ -147,13 +147,17 @@ bool tuh_msc_scsi_command(uint8_t daddr, msc_cbw_t const* cbw, void* data,
   // claim endpoint
   TU_VERIFY(usbh_edpt_claim(daddr, p_msc->ep_out));
   msch_epbuf_t* epbuf = get_epbuf(daddr);
+  // epbuf->cbw = *cbw; causes alignment fault
+  for (int i = 0; i < sizeof(epbuf->cbw); i++) {
+    ((uint8_t *) &epbuf->cbw)[i] = ((uint8_t *) cbw)[i];
+  }
 
-  epbuf->cbw = *cbw;
   p_msc->buffer = data;
   p_msc->complete_cb = complete_cb;
   p_msc->complete_arg = arg;
   p_msc->stage = MSC_STAGE_CMD;
 
+  TU_LOG3("MSC: performing xfer with buffer at 0x%p\n", &epbuf->cbw);
   if (!usbh_edpt_xfer(daddr, p_msc->ep_out, (uint8_t*) &epbuf->cbw, sizeof(msc_cbw_t))) {
     (void) usbh_edpt_release(daddr, p_msc->ep_out);
     return false;
@@ -228,7 +232,12 @@ bool tuh_msc_request_sense(uint8_t dev_addr, uint8_t lun, void* response,
       .cmd_code     = SCSI_CMD_REQUEST_SENSE,
       .alloc_length = 18
   };
+  TU_LOG3("cmd_len = %d\n", cbw.cmd_len);
+  TU_LOG3("cbw.command = 0x%p\n", cbw.command);
   memcpy(cbw.command, &cmd_request_sense, cbw.cmd_len); //-V1086
+  // for (int i = 0; i < cbw.cmd_len + 3; i += 4) {
+  //   *((uint32_t *) &cbw.command[i]) = * ((uint32_t *) (&cmd_request_sense) + i);
+  // }
 
   return tuh_msc_scsi_command(dev_addr, &cbw, response, complete_cb, arg);
 }
