@@ -33,6 +33,8 @@
 
 #include "msc_host.h"
 
+#include <dma.h>
+
 // Level where CFG_TUSB_DEBUG must be at least for this driver is logged
 #ifndef CFG_TUH_MSC_LOG_LEVEL
   #define CFG_TUH_MSC_LOG_LEVEL   CFG_TUH_LOG_LEVEL
@@ -77,7 +79,7 @@ typedef struct {
 } msch_epbuf_t;
 
 static msch_interface_t _msch_itf[CFG_TUH_DEVICE_MAX];
-CFG_TUH_MEM_SECTION static msch_epbuf_t *_msch_epbuf = (msch_epbuf_t *) 0x70030000;
+CFG_TUH_MEM_SECTION static msch_epbuf_t *_msch_epbuf = NULL;
 
 TU_ATTR_ALWAYS_INLINE static inline msch_interface_t* get_itf(uint8_t daddr) {
   return &_msch_itf[daddr - 1];
@@ -309,6 +311,7 @@ bool tuh_msc_reset(uint8_t dev_addr) {
 //--------------------------------------------------------------------+
 bool msch_init(void) {
   TU_LOG_DRV("sizeof(msch_interface_t) = %lu\r\n", sizeof(msch_interface_t));
+  _msch_epbuf = dmalloc(sizeof(msch_epbuf_t));
   TU_LOG_DRV("sizeof(msch_epbuf_t) = %lu\r\n", sizeof(msch_epbuf_t));
   tu_memclr(_msch_itf, sizeof(_msch_itf));
   return true;

@@ -39,6 +39,7 @@
 #include "host/usbh_pvt.h"
 #include "ehci_api.h"
 #include "ehci.h"
+#include <dma.h>
 
 // NXP specific fixes
 #if TU_CHECK_MCU(OPT_MCU_MIMXRT1XXX, OPT_MCU_LPC55, OPT_MCU_MCXN9, OPT_MCU_RW61X)
@@ -98,11 +99,9 @@ typedef struct {
 }ehci_data_t;
 
 
-#define EHCI_DMA_ADDR  0x70000000
-
 // Periodic frame list must be 4K alignment
 // CFG_TUH_MEM_SECTION TU_ATTR_ALIGNED(4096) 
-static ehci_data_t *ehci_data = (ehci_data_t *) EHCI_DMA_ADDR;
+static ehci_data_t *ehci_data = NULL;
 
 //--------------------------------------------------------------------+
 // Debu1
@@ -355,6 +354,8 @@ static void init_periodic_list(uint8_t rhport) {
 bool ehci_init(uint8_t rhport, uint32_t capability_reg, uint32_t operatial_reg)
 {
   TU_LOG3("\n\nEHCI INIT\n\n\n");
+
+  ehci_data = dmalloc(sizeof(ehci_data_t));
 
   tu_memclr(ehci_data, sizeof(ehci_data_t));
   TU_LOG3("EHCI: ehci_data at 0x%p\n", ehci_data);

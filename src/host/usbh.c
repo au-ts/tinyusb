@@ -33,6 +33,8 @@
 #include "usbh_pvt.h"
 #include "hub.h"
 
+#include <dma.h>
+
 //--------------------------------------------------------------------+
 // Configuration
 //--------------------------------------------------------------------+
@@ -200,7 +202,7 @@ typedef struct {
   TUH_EPBUF_DEF(ctrl, CFG_TUH_ENUMERATION_BUFSIZE);
 } usbh_epbuf_t;
 /* hack: hardcoded mapping */
-CFG_TUH_MEM_SECTION static usbh_epbuf_t *_usbh_epbuf = (usbh_epbuf_t *) 0x70010000;
+CFG_TUH_MEM_SECTION static usbh_epbuf_t *_usbh_epbuf = NULL;
 
 //--------------------------------------------------------------------+
 // Class Driver
@@ -507,6 +509,9 @@ bool tuh_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
     // Device
     tu_memclr(_usbh_devices, sizeof(_usbh_devices));
     tu_memclr(&_usbh_data, sizeof(_usbh_data));
+
+    _usbh_epbuf = dmalloc(sizeof(usbh_epbuf_t));
+
     tu_memclr(_usbh_epbuf, 0x10000); /* hack: size hardcoded */
 
     TU_LOG3("&_usbh_data=0x%p\n", &_usbh_data);
